@@ -1,0 +1,76 @@
+Starting Comprehensive Cross-Cutting Concerns Test
+Base URL: http://localhost:3001
+Timestamp: 2025-09-22T17:38:16.709Z
+
+=== Testing Rate Limiting ===
+Testing /api/upload with limit 10 req/min
+Request 1: Status 401, Remaining: N/A
+Request 2: Status 401, Remaining: N/A
+Request 3: Status 401, Remaining: N/A
+Request 4: Status 401, Remaining: N/A
+Request 5: Status 401, Remaining: N/A
+Request 6: Status 401, Remaining: N/A
+Request 7: Status 401, Remaining: N/A
+Request 8: Status 401, Remaining: N/A
+Request 9: Status 429, Remaining: 0
+Request 10: Status 401, Remaining: N/A
+Request 11 (should be limited): Status 401, Retry-After: N/A
+Waiting 60 seconds for rate limit reset...
+Testing /api/store/media-upload with limit 20 req/min
+Request 1: Status 401, Remaining: N/A
+Request 2: Status 401, Remaining: N/A
+Request 3: Status 401, Remaining: N/A
+Request 4: Status 401, Remaining: N/A
+Request 5: Status 401, Remaining: N/A
+Request 6: Status 401, Remaining: N/A
+Request 7: Status 401, Remaining: N/A
+Request 8: Status 401, Remaining: N/A
+Request 9: Status 401, Remaining: N/A
+Request 10: Status 401, Remaining: N/A
+Request 11: Status 401, Remaining: N/A
+Request 12: Status 401, Remaining: N/A
+Request 13: Status 401, Remaining: N/A
+Request 14: Status 401, Remaining: N/A
+Request 15: Status 401, Remaining: N/A
+Request 16: Status 429, Remaining: 0
+Request 17: Status 401, Remaining: N/A
+Request 18: Status 401, Remaining: N/A
+Request 19: Status 401, Remaining: N/A
+Request 20: Status 401, Remaining: N/A
+Request 21 (should be limited): Status 401, Retry-After: N/A
+Waiting 60 seconds for rate limit reset...
+Testing /api/stripe with limit 30 req/min
+Request 1: Status 400, Remaining: N/A
+Request 2: Status 400, Remaining: N/A
+Request 3: Status 400, Remaining: N/A
+Request 4: Status 400, Remaining: N/A
+Request 5: Status 400, Remaining: N/A
+Request 6: Status 400, Remaining: N/A
+Request 7: Status 400, Remaining: N/A
+Request 8: Status 400, Remaining: N/A
+Request 9: Status 400, Remaining: N/A
+Request 10: Status 400, Remaining: N/A
+Request 11: Status 429, Remaining: 0
+Request 12: Status 400, Remaining: N/A
+Request 13: Status 400, Remaining: N/A
+Request 14: Status 400, Remaining: N/A
+Request 15: Status 400, Remaining: N/A
+Request 16: Status 400, Remaining: N/A
+Request 17: Status 400, Remaining: N/A
+Request 18: Status 400, Remaining: N/A
+Request 19: Status 400, Remaining: N/A
+Request 20: Status 400, Remaining: N/A
+Request 21: Status 400, Remaining: N/A
+Request 22: Status 400, Remaining: N/A
+Request 23: Status 400, Remaining: N/A
+Request 24: Status 400, Remaining: N/A
+Request 25: Status 400, Remaining: N/A
+Request 26: Status 400, Remaining: N/A
+Request 27: Status 400, Remaining: N/A
+Request 28: Status 400, Remaining: N/A
+Request 29: Status 400, Remaining: N/A
+Request 30: Status 400, Remaining: N/A
+Request 31 (should be limited): Status 400, Retry-After: N/A
+Waiting 60 seconds for rate limit reset...
+
+=== Testing Input Validation ===

@@ -1,0 +1,1032 @@
+generator client {
+    provider        = "prisma-client-js"
+    previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+    provider  = "postgresql"
+    url       = env("DATABASE_URL")
+    directUrl = env("DIRECT_URL")
+}
+
+// Required for creating a User: id, name, email, image, cart (optional JSON string)
+model User {
+    id                     String    @id
+    name                   String
+    email                  String
+    image                  String
+    role                   Role      @default(USER)
+    cart                   Json      @default("{}")
+    phone                  String?
+    isPhoneVerified        Boolean   @default(false)
+    isEmailVerified        Boolean   @default(false)
+    twoFactorEnabled       Boolean   @default(false)
+    twoFactorSecret        String?
+    passwordResetToken     String?
+    passwordResetExpires   DateTime?
+    magicLinkToken         String?
+    magicLinkExpires       DateTime?
+    notificationPreferences Json     @default("{}")
+
+    // Relations
+    ratings        Rating[]
+    Address        Address[]
+    store          Store?
+    buyerOrders    Order[]          @relation("BuyerRelation")
+    supportTickets SupportTicket[]
+    auditLogs      AuditLog[]
+    apiKeys        ApiKey[]
+    browsingHistory UserBrowsingHistory[]
+    searchLogs     SearchLog[]
+}
+
+model ApiKey {
+    id          String   @id @default(cuid())
+    userId      String
+    name        String
+    key         String   @unique
+    permissions Json     @default("[]")
+    isActive    Boolean  @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Required for creating a Product: name, description, mrp, price, images, category, storeId
+model Product {
+    id              String        @id @default(cuid())
+    name            String
+    description     String
+    mrp             Float
+    price           Float
+    costPrice       Float?        // Cost price for profit calculations
+    images          String[]
+    category        String        // Legacy field, will be migrated to categoryId
+    categoryId      String?       // New category relation
+    subcategory     String?
+    tags            String[]      @default([])
+    attributes      Json          @default("{}") // Dynamic attributes based on category template
+    inStock         Boolean       @default(true)
+    currency        String        @default("USD")
+    storeId         String
+    status          ProductStatus @default(DRAFT)
+    moderationStatus ProductModerationStatus @default(PENDING)
+    flagLogs        Json          @default("[]")
+    sku             String?
+    stock           Int           @default(0)
+    reservedStock   Int           @default(0) // Stock reserved for pending orders
+    lowStockThreshold Int        @default(5)
+    weight          Float?        // For shipping calculations
+    dimensions      Json?         // {length, width, height, unit}
+    seoTitle        String?
+    seoDescription  String?
+    seoKeywords     String[]      @default([])
+    isDigital       Boolean       @default(false)
+    digitalFileUrl  String?
+    promotionType   String?       @default("none")
+    promotionValue  Float?        @default(0)
+    promotionStart  DateTime?
+    promotionEnd    DateTime?
+    basePrice       Float         @default(0) // Original price before any promotions
+    salePrice       Float?        // Current sale price if applicable
+    scheduledPriceChanges Json   @default("[]") // Array of {price, startDate, endDate}
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+
+    // Relations
+    store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+    categoryRef     Category?        @relation(fields: [categoryId], references: [id])
+    orderItems      OrderItem[]
+    rating          Rating[]
+    productVariants ProductVariant[]
+    inventoryLogs   InventoryLog[]
+    mediaGallery    ProductMedia[]
+    priceHistory    ProductPriceHistory[]
+    promotionRules  ProductPromotionRule[]
+    moderationLogs  ProductModerationLog[]
+    attributeValues ProductAttributeValue[]
+    browsingHistory UserBrowsingHistory[]
+
+    // Full-text search fields
+    searchVector Unsupported("tsvector")?
+
+}
+
+enum OrderStatus {
+    ORDER_PLACED
+    PROCESSING
+    SHIPPED
+    DELIVERED
+    CANCELLED
+    REFUNDED
+}
+
+enum PaymentMethod {
+    COD
+    STRIPE
+}
+
+enum PayoutStatus {
+    PENDING
+    PAID
+    FAILED
+}
+
+enum Role {
+    USER
+    SELLER
+    ADMIN
+    STAFF
+}
+
+enum ProductStatus {
+    ACTIVE
+    FLAGGED
+    OUT_OF_STOCK
+    DRAFT
+    ARCHIVED
+    DELETED
+}
+
+enum ProductModerationStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    REQUIRES_CHANGES
+}
+
+enum PromotionType {
+    NONE
+    PERCENTAGE
+    FIXED
+    BUY_X_GET_Y
+    BUNDLE
+    QUANTITY_DISCOUNT
+    FLASH_DEAL
+}
+
+enum MediaType {
+    IMAGE
+    VIDEO
+    DOCUMENT
+}
+
+enum VendorStatus {
+    PENDING
+    APPROVED
+    SUSPENDED
+    REJECTED
+}
+
+enum ShipmentStatus {
+    PENDING
+    SHIPPED
+    IN_TRANSIT
+    DELIVERED
+    FAILED
+}
+
+enum ReturnStatus {
+    REQUESTED
+    APPROVED
+    RECEIVED
+    REFUNDED
+    REJECTED
+}
+
+enum TicketStatus {
+    OPEN
+    IN_PROGRESS
+    CLOSED
+    RESOLVED
+    ESCALATED
+}
+
+enum KnowledgeBaseCategory {
+    POLICIES
+    BEST_PRACTICES
+    TROUBLESHOOTING
+}
+
+enum AnnouncementType {
+    DOWNTIME
+    POLICY_UPDATE
+    SYSTEM
+}
+
+enum NotificationType {
+    EMAIL
+    DASHBOARD
+}
+
+// Required for creating an Order: total, userId, storeId, addressId, isPaid, paymentMethod, isCouponUsed, coupon (JSON), orderItems (nested)
+model Order {
+    id              String        @id @default(cuid())
+    total           Float
+    totalCommission Float         @default(0)
+    commissionPaid  Boolean       @default(false)
+    status          OrderStatus   @default(ORDER_PLACED)
+    userId          String
+    storeId         String
+    addressId       String
+    isPaid          Boolean       @default(false)
+    paymentMethod   PaymentMethod
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+    isCouponUsed    Boolean       @default(false)
+    coupon          Json          @default("{}")
+    currency        String        @default("USD")
+    orderItems      OrderItem[]
+
+    // Relations
+    user           User            @relation("BuyerRelation", fields: [userId], references: [id])
+    store          Store           @relation(fields: [storeId], references: [id])
+    address        Address         @relation(fields: [addressId], references: [id])
+    shipments      Shipment[]
+    returns        Return[]
+    refunds        Refund[]
+    supportTickets SupportTicket[]
+}
+
+// Required for creating an OrderItem: orderId, productId, quantity, price
+model OrderItem {
+    orderId          String
+    productId        String
+    quantity         Int
+    price            Float
+    commissionAmount Float  @default(0)
+    currency         String @default("USD")
+
+    // Relations
+    order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+    product Product @relation(fields: [productId], references: [id])
+
+    @@id([orderId, productId])
+}
+
+// Required for creating a Rating: rating, review, userId, productId
+model Rating {
+    id        String   @id @default(cuid())
+    rating    Int
+    review    String
+    userId    String
+    productId String
+    orderId   String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+    @@unique([userId, productId, orderId])
+}
+
+// Required for creating an Address: userId, name, email, street, city, state, zip, country, phone
+model Address {
+    id        String   @id @default(cuid())
+    userId    String
+    name      String
+    email     String
+    street    String
+    city      String
+    state     String
+    zip       String
+    country   String
+    phone     String
+    createdAt DateTime @default(now())
+
+    // Relations
+    Order Order[]
+    user  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Required for creating a Coupon: code, description, discount, forNewUser, isPublic, expiresAt
+model Coupon {
+    code        String   @id
+    description String
+    discount    Float
+    forNewUser  Boolean
+    forMember   Boolean  @default(false)
+    isPublic    Boolean
+    expiresAt   DateTime
+    createdAt   DateTime @default(now())
+}
+
+// Required for creating a CommissionRate: storeId, rate, adminUserId
+model CommissionRate {
+    id          String   @id @default(cuid())
+    storeId     String   @unique
+    rate        Float    @db.Real
+    adminUserId String
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    // Relations
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+    @@map("commission_rates")
+}
+
+// Required for creating a Payout: storeId, amount, status
+model Payout {
+    id            String       @id @default(cuid())
+    storeId       String
+    amount        Float
+    status        PayoutStatus @default(PENDING)
+    payoutDate    DateTime?
+    scheduledDate DateTime?
+    createdAt     DateTime     @default(now())
+    updatedAt     DateTime     @updatedAt
+
+    // Relations
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model PlatformSettings {
+    id                  Int      @id @default(autoincrement())
+    siteName            String?
+    logoUrl             String?
+    faviconUrl          String?
+    defaultLanguage     String?  @default("en")
+    supportedLanguages  String[] @default([])
+    maintenanceEnabled  Boolean  @default(false)
+    maintenanceMessage  String?
+    primaryColor        String?
+    facebookUrl         String?
+    twitterUrl          String?
+    instagramUrl        String?
+    linkedinUrl         String?
+    youtubeUrl          String?
+    tiktokUrl           String?
+    baseCurrency        String?  @default("USD")
+    exchangeRates       Json?
+    analyticsEnabled    Boolean  @default(false)
+    googleAnalyticsId   String?
+    facebookPixelId     String?
+    smtpHost            String?
+    smtpPort            Int?
+    smtpUser            String?
+    smtpPassword        String?
+    smtpSecure          Boolean? @default(false)
+    fromEmail           String?
+    fromName            String?
+    globalCommissionRate Float?
+    categoryCommissionRates Json?
+    emailNotificationsEnabled Boolean @default(false)
+    newUserNotifications     Boolean @default(false)
+    orderNotifications       Boolean @default(false)
+    commissionNotifications  Boolean @default(false)
+    payoutNotifications      Boolean @default(false)
+    systemNotifications      Boolean @default(false)
+    metaTitle           String?
+    metaDescription     String?
+    metaKeywords        String?
+    ogTitle             String?
+    ogDescription       String?
+    ogImageUrl          String?
+    // Platform configuration fields
+    taxRates            Json?
+    shippingZones       Json?
+    paymentMethods      Json?
+    stripePublishableKey String?
+    stripeSecretKey     String?
+    imageKitPublicKey   String?
+    imageKitPrivateKey  String?
+    imageKitUrlEndpoint String?
+    // Content fields
+    homepageBanner      String?
+    promotionalBanners  Json? // Array of banner objects
+    policyPages         Json? // Object with terms, privacy, refund policies
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+}
+
+// Required for creating a Store: userId, name, username, email, contact, logo, description, address (optional: , status, isActive)
+model Store {
+    id          String   @id @default(cuid())
+    userId      String   @unique
+    name        String
+    description String
+    username    String   @unique
+    address     String
+    status      String   @default("pending")
+    isActive    Boolean  @default(false)
+    logo        String
+    email       String
+    contact     String
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    stripeAccountId String?
+
+    Product          Product[]
+    Order            Order[]
+    CommissionRate   CommissionRate[]
+    Payout           Payout[]
+    user             User                   @relation(fields: [userId], references: [id])
+    vendorStatus     VendorStatus           @default(PENDING)
+    vendorProfile    VendorProfile?
+    vendorDocuments  VendorDocument[]
+    vendorFinancials VendorFinancial[]
+    vendorSettings   VendorSettings?
+    webhooks         Webhook[]
+    supportTickets   SupportTicket[]
+    auditLogs        AuditLog[]
+    dailyFinancialSummaries DailyFinancialSummary[]
+    taxRecords       TaxRecord[]
+    financialStatements FinancialStatement[]
+    analyticsData    AnalyticsData[]
+    customReports    CustomReport[]
+    analyticsAlerts  AnalyticsAlert[]
+    customerBehavior CustomerBehavior[]
+}
+
+model SubscriptionPlan {
+    id          String   @id @default(cuid())
+    name        String   @unique
+    description String?
+    price       Float   @default(0) // monthly price
+    commissionRate Float @default(0) // percentage
+    listingLimit Int    @default(0) // max products
+    features    Json    @default("[]") // array of features
+    registrationFee Float @default(0)
+    listingFee Float @default(0)
+    isActive    Boolean @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    vendorProfiles VendorProfile[]
+}
+
+model VendorProfile {
+    id             String   @id @default(cuid())
+    storeId        String   @unique
+    businessName   String
+    taxId          String?
+    businessAddress String
+    contactPerson  String
+    phone          String
+    website        String?
+    description    String?
+    // Bank info
+    bankName       String?
+    accountNumber  String?
+    routingNumber  String?
+    accountHolderName String?
+    bankAddress    String?
+    termsAccepted  Boolean  @default(false)
+    // KYC fields
+    idDocumentType String?
+    idDocumentNumber String?
+    businessLicenseNumber String?
+    // Branding elements
+    logoUrl        String?
+    bannerUrl      String?
+    primaryColor   String?
+    secondaryColor String?
+    aboutPage      String?
+    customDomain   String?
+    seoTitle       String?
+    seoDescription String?
+    seoKeywords    String[] @default([])
+    // Subscription
+    subscriptionPlanId String?
+    subscriptionStartDate DateTime?
+    subscriptionEndDate DateTime?
+    isSubscriptionActive Boolean @default(false)
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+    subscriptionPlan SubscriptionPlan? @relation(fields: [subscriptionPlanId], references: [id])
+}
+
+model VendorDocument {
+    id           String   @id @default(cuid())
+    storeId      String
+    documentType String
+    documentUrl  String
+    status       String   @default("pending")
+    uploadedAt   DateTime @default(now())
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model ProductVariant {
+    id         String   @id @default(cuid())
+    productId  String
+    name       String
+    sku        String?
+    price      Float?
+    stock      Int      @default(0)
+    attributes Json
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    product       Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+    inventoryLogs InventoryLog[]
+}
+
+model InventoryLog {
+    id             String      @id @default(cuid())
+    productId      String?
+    variantId      String?
+    changeType     String      // stock_in, stock_out, reserved, released, adjustment, bulk_update
+    quantity       Int
+    reservedChange Int         @default(0) // Change in reserved stock
+    reason         String?
+    orderId        String?     // Reference to order that caused the change
+    userId         String?     // User who made the change
+    createdAt      DateTime    @default(now())
+
+    product Product?       @relation(fields: [productId], references: [id])
+    variant ProductVariant? @relation(fields: [variantId], references: [id])
+}
+
+model Shipment {
+    id             String        @id @default(cuid())
+    orderId        String
+    trackingNumber String?
+    carrier        String?
+    status         ShipmentStatus @default(PENDING)
+    shippedAt      DateTime?
+    deliveredAt    DateTime?
+    createdAt      DateTime      @default(now())
+    updatedAt      DateTime      @updatedAt
+
+    order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Return {
+    id          String      @id @default(cuid())
+    orderId     String
+    reason      String
+    status      ReturnStatus @default(REQUESTED)
+    requestedAt DateTime    @default(now())
+    approvedAt  DateTime?
+    receivedAt  DateTime?
+    refundedAt  DateTime?
+    createdAt   DateTime    @default(now())
+    updatedAt   DateTime    @updatedAt
+
+    order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model Refund {
+    id          String   @id @default(cuid())
+    orderId     String
+    amount      Float
+    reason      String
+    status      String   @default("pending")
+    processedAt DateTime?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model VendorFinancial {
+    id             String   @id @default(cuid())
+    storeId        String
+    totalSales     Float    @default(0)
+    totalCommissions Float  @default(0)
+    totalPayouts   Float    @default(0)
+    currentBalance Float    @default(0)
+    pendingPayouts Float    @default(0)
+    lastCalculated DateTime?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+    dailySummaries DailyFinancialSummary[]
+}
+
+model DailyFinancialSummary {
+    id                String   @id @default(cuid())
+    storeId           String
+    vendorFinancialId String
+    date              DateTime
+    totalSales        Float    @default(0)
+    orderCount        Int      @default(0)
+    averageOrderValue Float    @default(0)
+    unitsSold         Int      @default(0)
+    grossRevenue      Float    @default(0)
+    netRevenue        Float    @default(0)
+    totalCommissions  Float    @default(0)
+    totalRefunds      Float    @default(0)
+    totalReturns      Float    @default(0)
+    currency          String   @default("USD")
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+    vendorFinancial VendorFinancial @relation(fields: [vendorFinancialId], references: [id], onDelete: Cascade)
+    commissionBreakdowns CommissionBreakdown[]
+
+    @@unique([storeId, date])
+}
+
+model CommissionBreakdown {
+    id                   String   @id @default(cuid())
+    dailySummaryId       String
+    orderId              String?
+    commissionType       String   // platform, category, tier
+    commissionRate       Float
+    commissionAmount     Float
+    baseAmount           Float
+    tierLevel            String?
+    category             String?
+    createdAt            DateTime @default(now())
+
+    dailySummary DailyFinancialSummary @relation(fields: [dailySummaryId], references: [id], onDelete: Cascade)
+}
+
+model TaxRecord {
+    id          String   @id @default(cuid())
+    storeId     String
+    period      String   // monthly, quarterly, yearly
+    startDate   DateTime
+    endDate     DateTime
+    taxType     String   // GST, VAT, etc.
+    region      String
+    taxRate     Float
+    taxableAmount Float
+    taxAmount   Float
+    currency    String   @default("USD")
+    status      String   @default("pending") // pending, filed, paid
+    filedAt     DateTime?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model FinancialStatement {
+    id          String   @id @default(cuid())
+    storeId     String
+    period      String   // monthly, quarterly
+    startDate   DateTime
+    endDate     DateTime
+    type        String   // sales, commissions, payouts
+    totalAmount Float
+    currency    String   @default("USD")
+    fileUrl     String?
+    status      String   @default("generated")
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model SupportTicket {
+    id          String      @id @default(cuid())
+    storeId     String?
+    userId      String?
+    orderId     String?
+    subject     String
+    description String
+    status      TicketStatus @default(OPEN)
+    priority    String      @default("medium")
+    createdAt   DateTime    @default(now())
+    updatedAt   DateTime    @updatedAt
+
+    store Store? @relation(fields: [storeId], references: [id])
+    user  User?  @relation(fields: [userId], references: [id])
+    order Order? @relation(fields: [orderId], references: [id])
+    messages SupportTicketMessage[]
+}
+
+model SupportTicketMessage {
+    id        String   @id @default(cuid())
+    ticketId  String
+    senderId  String   // admin or user/store id
+    senderType String  // 'admin', 'user', 'store'
+    message   String
+    createdAt DateTime @default(now())
+
+    ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+}
+
+model VendorSettings {
+    id                  String  @id @default(cuid())
+    storeId             String  @unique
+
+    // Profile settings
+    emailNotifications  Boolean @default(true)
+    orderNotifications  Boolean @default(true)
+    returnNotifications Boolean @default(true)
+    payoutNotifications Boolean @default(true)
+
+    // Store configuration
+    operatingHours      Json    @default("{}") // {monday: {open: "09:00", close: "17:00"}, ...}
+    shippingOriginAddress Json  @default("{}") // {street, city, state, zip, country}
+    defaultShippingMethods Json @default("[]") // [{name, carrier, service, cost, estimatedDays}]
+
+    // Legacy fields
+    notificationsEnabled Boolean @default(true)
+    autoApproveReturns  Boolean @default(false)
+
+    createdAt           DateTime @default(now())
+    updatedAt           DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model Webhook {
+    id          String   @id @default(cuid())
+    storeId     String
+    name        String
+    url         String
+    events      Json     @default("[]") // ["order.created", "order.updated", "fulfillment.shipped", etc.]
+    secret      String   // For webhook signature verification
+    isActive    Boolean  @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+    id        String   @id @default(cuid())
+    storeId   String?
+    userId    String?
+    action    String
+    details   Json
+    createdAt DateTime @default(now())
+
+    store Store? @relation(fields: [storeId], references: [id])
+    user  User?  @relation(fields: [userId], references: [id])
+}
+
+// Analytics models
+model AnalyticsData {
+    id                String   @id @default(cuid())
+    storeId           String
+    date              DateTime
+    conversionRate    Float?   // Percentage of visitors who make purchases
+    returnRate        Float?   // Percentage of orders returned
+    fulfillmentTime   Float?   // Average time in hours for order fulfillment
+    customerRating    Float?   // Average customer rating
+    totalVisitors     Int      @default(0)
+    totalOrders       Int      @default(0)
+    totalRevenue      Float    @default(0)
+    cartAbandonmentRate Float? // Percentage of carts abandoned
+    topSearchTerms    Json     @default("[]") // Array of search terms with counts
+    inventoryLowAlerts Int     @default(0)
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+    @@unique([storeId, date])
+}
+
+model CustomReport {
+    id          String   @id @default(cuid())
+    storeId     String
+    name        String
+    description String?
+    metrics     Json     // Selected metrics to include
+    timeframe   String   // daily, weekly, monthly, custom
+    startDate   DateTime?
+    endDate     DateTime?
+    filters     Json     @default("{}") // Additional filters
+    fileUrl     String?
+    status      String   @default("pending") // pending, generating, completed, failed
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model AnalyticsAlert {
+    id          String   @id @default(cuid())
+    storeId     String
+    type        String   // inventory_low, high_return_rate, low_conversion, etc.
+    threshold   Float
+    currentValue Float
+    message     String
+    isActive    Boolean  @default(true)
+    lastTriggered DateTime?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model CustomerBehavior {
+    id                String   @id @default(cuid())
+    storeId           String
+    date              DateTime
+    searchTerms       Json     @default("[]") // Array of {term: string, count: number}
+    cartAbandonments  Int      @default(0)
+    abandonedCartValue Float   @default(0)
+    topProductViews   Json     @default("[]") // Array of product IDs with view counts
+    createdAt         DateTime @default(now())
+    updatedAt         DateTime @updatedAt
+
+    store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+    @@unique([storeId, date])
+}
+
+// Product Management Models
+
+model ProductAttributeTemplate {
+    id          String   @id @default(cuid())
+    category    String
+    name        String
+    type        String   // text, number, select, boolean, date
+    required    Boolean  @default(false)
+    options     Json?    // For select type: array of options
+    validation  Json?    // Validation rules: {min, max, pattern, etc.}
+    unit        String?  // Unit for measurements
+    displayOrder Int     @default(0)
+    isActive    Boolean  @default(true)
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    values ProductAttributeValue[]
+
+    @@unique([category, name])
+}
+
+model ProductMedia {
+    id          String     @id @default(cuid())
+    productId   String
+    url         String
+    thumbnailUrl String?
+    type        MediaType  @default(IMAGE)
+    alt         String?
+    caption     String?
+    sortOrder   Int        @default(0)
+    isPrimary   Boolean    @default(false)
+    fileSize    Int?
+    dimensions  Json?      // {width, height}
+    metadata    Json       @default("{}")
+    createdAt   DateTime   @default(now())
+    updatedAt   DateTime   @updatedAt
+
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductPriceHistory {
+    id          String   @id @default(cuid())
+    productId   String
+    oldPrice    Float
+    newPrice    Float
+    changeType  String   // manual, promotion, scheduled, bulk_update
+    reason      String?
+    changedBy   String?  // User ID who made the change
+    effectiveDate DateTime?
+    createdAt   DateTime @default(now())
+
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductPromotionRule {
+    id              String        @id @default(cuid())
+    productId       String
+    type            PromotionType
+    name            String
+    description     String?
+    isActive        Boolean       @default(true)
+    priority        Int           @default(0) // Higher priority rules apply first
+    conditions      Json          @default("{}") // Rule conditions
+    actions         Json          @default("{}") // Rule actions
+    startDate       DateTime?
+    endDate         DateTime?
+    usageLimit      Int?          // Total usage limit
+    usageCount      Int           @default(0)
+    perUserLimit    Int?          // Usage limit per user
+    applicableUsers Json?         // Specific users or user groups
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductModerationLog {
+    id              String   @id @default(cuid())
+    productId       String
+    action          String   // approved, rejected, flagged, requires_changes
+    reason          String?
+    notes           String?
+    moderatedBy     String?  // Admin user ID
+    previousStatus  ProductModerationStatus?
+    newStatus       ProductModerationStatus
+    productSnapshot Json?    // Snapshot of product data at time of moderation
+    createdAt       DateTime @default(now())
+
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductAttributeValue {
+    id         String   @id @default(cuid())
+    productId  String
+    templateId String
+    value      Json     // The actual value (string, number, boolean, etc.)
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    product  Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+    template ProductAttributeTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+    @@unique([productId, templateId])
+}
+
+
+model KnowledgeBase {
+    id        String                @id @default(cuid())
+    title     String
+    content   String
+    category  KnowledgeBaseCategory
+    createdAt DateTime              @default(now())
+    updatedAt DateTime              @updatedAt
+}
+
+model Announcement {
+    id        String           @id @default(cuid())
+    title     String
+    content   String
+    type      AnnouncementType
+    isActive  Boolean          @default(true)
+    createdAt DateTime         @default(now())
+    updatedAt DateTime         @updatedAt
+}
+
+model Notification {
+    id        String           @id @default(cuid())
+    title     String
+    message   String
+    type      NotificationType
+    isRead    Boolean          @default(false)
+    createdAt DateTime         @default(now())
+    updatedAt DateTime         @updatedAt
+}
+
+// Search & Discovery Models
+
+model Category {
+    id              String   @id @default(cuid())
+    name            String
+    slug            String   @unique
+    description     String?
+    image           String?
+    parentId        String?
+    seoTitle        String?
+    seoDescription  String?
+    seoKeywords     String[] @default([])
+    landingContent  String?  // HTML content for custom landing page
+    isActive        Boolean  @default(true)
+    displayOrder    Int      @default(0)
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    parent          Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
+    children        Category[] @relation("CategoryHierarchy")
+    products        Product[]
+}
+
+model UserBrowsingHistory {
+    id        String   @id @default(cuid())
+    userId    String
+    productId String
+    sessionId String?  // For anonymous users
+    viewedAt  DateTime @default(now())
+
+    user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+    @@index([userId, viewedAt])
+    @@index([productId, viewedAt])
+}
+
+model SearchSynonym {
+    id       String   @id @default(cuid())
+    term     String   @unique
+    synonyms String[] // Array of synonym terms
+    isActive Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+}
+
+model SearchLog {
+    id          String   @id @default(cuid())
+    query       String
+    userId      String?
+    sessionId   String?
+    ipAddress   String?
+    userAgent   String?
+    resultCount Int      @default(0)
+    correctedQuery String?
+    suggestions String[] @default([])
+    duration    Int      // Search duration in milliseconds
+    createdAt   DateTime @default(now())
+
+    user User? @relation(fields: [userId], references: [id])
+
+    @@index([query, createdAt])
+    @@index([userId, createdAt])
+}

@@ -1,0 +1,150 @@
+'use client'
+import { dummyStoreDashboardData } from "@/assets/assets"
+import Loading from "@/components/Loading"
+import { useAuth } from "@clerk/nextjs"
+import axios from "axios"
+import { CircleDollarSignIcon, ShoppingBasketIcon, StarIcon, TagsIcon, DollarSignIcon } from "lucide-react"
+import Image from "next/image"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import toast from "react-hot-toast"
+
+export default function Dashboard() {
+
+    const {getToken} = useAuth()
+
+    const currency = process.env.NEXT_PUBLIC_CURRENCY_SYMBOL || '$'
+
+    const router = useRouter()
+
+    const [loading, setLoading] = useState(true)
+    const [dashboardData, setDashboardData] = useState({
+        totalProducts: 0,
+        grossEarnings: 0,
+        netEarnings: 0,
+        totalOrders: 0,
+        totalCommissions: 0,
+        commissionBreakdowns: [],
+        ratings: [],
+    })
+
+    const dashboardCardsData = [
+        { title: 'Total Products', value: dashboardData.totalProducts, icon: ShoppingBasketIcon },
+        { title: 'Net Earnings', value: currency + dashboardData.netEarnings, icon: CircleDollarSignIcon },
+        { title: 'Total Commissions', value: currency + dashboardData.totalCommissions, icon: DollarSignIcon },
+        { title: 'Total Orders', value: dashboardData.totalOrders, icon: TagsIcon },
+        { title: 'Total Ratings', value: dashboardData.ratings.length, icon: StarIcon },
+    ]
+
+    const fetchDashboardData = async () => {
+        try {
+            const token = await getToken()
+            const { data } = await axios.get('/api/store/dashboard', {headers: { Authorization: `Bearer ${token}` }})
+            setDashboardData(data.dashboardData)
+        } catch (error) {
+            toast.error(error?.response?.data?.error || error.message)
+        }
+        setLoading(false)
+    }
+
+    useEffect(() => {
+        fetchDashboardData()
+    }, [])
+
+    if (loading) return <Loading />
+
+    return (
+        <div className=" text-slate-500 mb-28">
+            <h1 className="text-2xl">Seller <span className="text-slate-800 font-medium">Dashboard</span></h1>
+
+            {/* Status Indicator */}
+            <div className="mt-4 p-4 border rounded-lg">
+                <h2 className="text-lg font-semibold">Account Status</h2>
+                <p className={`mt-2 ${dashboardData.vendorStatus === 'APPROVED' ? 'text-green-600' : dashboardData.vendorStatus === 'PENDING' ? 'text-yellow-600' : 'text-red-600'}`}>
+                    Status: {dashboardData.vendorStatus}
+                </p>
+                {dashboardData.vendorStatus === 'PENDING' && (
+                    <p className="mt-2 text-sm">Complete your onboarding to get approved.</p>
+                )}
+            </div>
+
+            <div className="flex flex-wrap gap-5 my-10 mt-4">
+                {
+                    dashboardCardsData.map((card, index) => (
+                        <div key={index} className="flex items-center gap-11 border border-slate-200 p-3 px-6 rounded-lg">
+                            <div className="flex flex-col gap-3 text-xs">
+                                <p>{card.title}</p>
+                                <b className="text-2xl font-medium text-slate-700">{card.value}</b>
+                            </div>
+                            <card.icon size={50} className=" w-11 h-11 p-2.5 text-slate-400 bg-slate-100 rounded-full" />
+                        </div>
+                    ))
+                }
+            </div>
+
+            <h2>Total Reviews</h2>
+
+            <div className="mt-5">
+                {
+                    dashboardData.ratings.map((review, index) => (
+                        <div key={index} className="flex max-sm:flex-col gap-5 sm:items-center justify-between py-6 border-b border-slate-200 text-sm text-slate-600 max-w-4xl">
+                            <div>
+                                <div className="flex gap-3">
+                                    <Image src={review.user.image} alt="" className="w-10 aspect-square rounded-full" width={100} height={100} />
+                                    <div>
+                                        <p className="font-medium">{review.user.name}</p>
+                                        <p className="font-light text-slate-500">{new Date(review.createdAt).toDateString()}</p>
+                                    </div>
+                                </div>
+                                <p className="mt-3 text-slate-500 max-w-xs leading-6">{review.review}</p>
+                            </div>
+                            <div className="flex flex-col justify-between gap-6 sm:items-end">
+                                <div className="flex flex-col sm:items-end">
+                                    <p className="text-slate-400">{review.product?.category}</p>
+                                    <p className="font-medium">{review.product?.name}</p>
+                                    <div className='flex items-center'>
+                                        {Array(5).fill('').map((_, index) => (
+                                            <StarIcon key={index} size={17} className='text-transparent mt-0.5' fill={review.rating >= index + 1 ? "#00C950" : "#D1D5DB"} />
+                                        ))}
+                                    </div>
+                                </div>
+                                <button onClick={() => router.push(`/product/${review.product.id}`)} className="bg-slate-100 px-5 py-2 hover:bg-slate-200 rounded transition-all">View Product</button>
+                            </div>
+                        </div>
+                    ))
+                }
+            </div>
+
+            <h2 className="mt-10">Commission Breakdowns</h2>
+
+            <div className="mt-5 overflow-x-auto">
+                <table className="w-full border-collapse border border-slate-200 text-sm">
+                    <thead>
+                        <tr className="bg-slate-50">
+                            <th className="border border-slate-200 p-3 text-left">Order ID</th>
+                            <th className="border border-slate-200 p-3 text-left">Order Total</th>
+                            <th className="border border-slate-200 p-3 text-left">Commission</th>
+                            <th className="border border-slate-200 p-3 text-left">Paid</th>
+                            <th className="border border-slate-200 p-3 text-left">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {dashboardData.commissionBreakdowns.map((breakdown, index) => (
+                            <tr key={index} className="hover:bg-slate-50">
+                                <td className="border border-slate-200 p-3">{breakdown.orderId}</td>
+                                <td className="border border-slate-200 p-3">{currency}{breakdown.total}</td>
+                                <td className="border border-slate-200 p-3">{currency}{breakdown.totalCommission}</td>
+                                <td className="border border-slate-200 p-3">
+                                    <span className={`px-2 py-1 rounded text-xs ${breakdown.commissionPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                        {breakdown.commissionPaid ? 'Paid' : 'Pending'}
+                                    </span>
+                                </td>
+                                <td className="border border-slate-200 p-3">{new Date(breakdown.createdAt).toDateString()}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    )
+}
