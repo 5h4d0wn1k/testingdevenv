@@ -164,7 +164,7 @@ export default function CustomerInsights({ data }) {
                                 <div>
                                     <h4 className="text-sm font-medium text-blue-800">Popular Search Terms</h4>
                                     <p className="text-sm text-blue-700 mt-1">
-                                        Your customers are searching for '{searchTerms[0]?.term}'. Consider optimizing your product listings and descriptions for these terms.
+                                        Your customers are searching for &#39;{searchTerms[0]?.term}&#39;. Consider optimizing your product listings and descriptions for these terms.
                                     </p>
                                 </div>
                             </div>
