@@ -31,7 +31,7 @@ const Navbar = () => {
                             <img src={publicData.logoUrl} alt={publicData.siteName || 'Logo'} className="h-10 w-auto" />
                         ) : (
                             <>
-                                <span className="text-green-600">{publicData?.siteName?.charAt(0) || 'D'}</span>{publicData?.siteName?.slice(1) || 'avCreations'}<span className="text-green-600 text-5xl leading-0">.</span>
+                                <span className="text-green-600">{publicData?.siteName?.charAt(0) || 'H'}</span>{publicData?.siteName?.slice(1) || 'omeSolution'}<span className="text-green-600 text-5xl leading-0">.</span>
                             </>
                         )}
                         <Protect plan='plus'>
